@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="105mm"
+   height="105mm"
+   viewBox="0 0 105 105"
+   version="1.1"
+   id="svg8"
+   inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
+   sodipodi:docname="time_is_up_logo.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <defs
+     id="defs2" />
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="0.87169901"
+     inkscape:cx="202.47815"
+     inkscape:cy="182.40241"
+     inkscape:document-units="mm"
+     inkscape:current-layer="layer1"
+     inkscape:document-rotation="0"
+     showgrid="false"
+     showguides="true"
+     inkscape:guide-bbox="true"
+     inkscape:window-width="1366"
+     inkscape:window-height="719"
+     inkscape:window-x="0"
+     inkscape:window-y="25"
+     inkscape:window-maximized="1"
+     inkscape:pagecheckerboard="0" />
+  <metadata
+     id="metadata5">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <path
+       id="path833"
+       style="fill:#f9f9f9;stroke:#e6c800;stroke-width:7.05782;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="M 101.47109,52.500002 A 48.971092,48.971092 0 0 1 52.500002,101.47109 48.971092,48.971092 0 0 1 3.5289099,52.500002 48.971092,48.971092 0 0 1 52.500002,3.5289094 48.971092,48.971092 0 0 1 101.47109,52.500002 Z" />
+    <g
+       id="g30108"
+       transform="translate(5e-7,2.1964747)">
+      <path
+         id="rect861"
+         style="fill:#80e7f8;fill-opacity:1;stroke:none;stroke-width:6.98538;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         d="M 74.504755,50.303536 H 30.495246 V 38.204424 h 44.009509 z" />
+      <g
+         id="g30101"
+         transform="translate(0,-4.3929497)">
+        <path
+           id="rect859"
+           style="fill:#65a5a5;fill-opacity:1;stroke:none;stroke-width:6.98538;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+           d="M 30.495245,77.966023 H 74.504754 V 90.065135 H 30.495245 Z" />
+        <path
+           style="fill:none;stroke:#2a7f9e;stroke-width:5.0413;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+           d="M 33.015822,71.676477 V 87.544482 H 71.984177 V 71.676477 L 52.5,57.791674 Z"
+           id="path851" />
+      </g>
+      <path
+         style="fill:none;stroke:#2a7f9e;stroke-width:5.0413;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         d="M 33.015822,31.914855 V 47.782878 H 71.984177 V 31.914855 L 52.5,18.030061 Z"
+         id="path853" />
+    </g>
+  </g>
+</svg>
