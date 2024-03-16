@@ -1,4 +1,6 @@
 [profile.default]
+solc_version = "0.8.24"
+auto_detect_solc = true
 src = "src"
 out = "out"
 libs = ["lib"]
@@ -6,7 +8,13 @@ libs = ["lib"]
 remappings = [
     '@layerzerolabs/=lib/solidity-examples/',
     '@aave/core-v3/=lib/aave-v3-core/',
-    '@chainlink/=lib/chainlink/'
+    '@chainlink/=lib/chainlink/',
+    '@beefy/=lib/beefy-contracts/contracts/BIFI/',
+    '@beefy-zaps/=lib/beefy-zaps/',
+    '@0x/contracts-utils/=lib/0xprotocol/utils/',
+    '@0x/zero-ex/=lib/0xprotocol/zero-ex/',
+    '@0x/contracts-erc20/=lib/0xprotocol/erc20/',
+    '@openzeppelin/=lib/openzeppelin-contracts/'
 ]
 
 block_gas_limit = 20_000_000

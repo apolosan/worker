@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "./Minion.sol";
-import "./Worker.sol";
+import { Minion, ITimeToken } from "./Minion.sol";
+import { Worker } from "./Worker.sol";
 
 contract MinionCoordinator {
 

@@ -1,0 +1,6 @@
+[submodule "lib/beefy-contracts"]
+	path = lib/beefy-contracts
+	url = https://github.com/beefyfinance/beefy-contracts
+[submodule "lib/protocol"]
+	path = lib/protocol
+	url = https://github.com/0xProject/protocol

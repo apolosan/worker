@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "@openzeppelin/contracts/utils/math/Math.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "./MinionCoordinator.sol";
-import "./ITimeIsUp.sol";
-import "./IEmployer.sol";
-import "./Investor.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { MinionCoordinator } from "./MinionCoordinator.sol";
+import { ITimeToken } from "./ITimeToken.sol";
+import { ITimeIsUp } from "./ITimeIsUp.sol";
+import { IEmployer } from "./IEmployer.sol";
+import { ISponsor } from "./ISponsor.sol";
+import { Investor } from "./Investor.sol";
 
 contract Worker is Ownable {
     using Math for uint256;
@@ -31,6 +33,7 @@ contract Worker is Ownable {
 
     uint256 public baseTimeFrame;
     uint256 public earnedAmount;
+    uint256 public totalAdditionalTupFromInvestor;
     uint256 public totalDepositedTup;
 
     mapping(address => uint256) private _consumedDividendPerToken;
@@ -39,13 +42,24 @@ contract Worker is Ownable {
     mapping(address => uint256) public depositedTup;
     mapping(address => uint256) public blockToUnlock;
 
-    constructor(address timeTokenAddress, address tupAddress, address employerAddress) Ownable(msg.sender) {
-        timeToken = ITimeToken(payable(timeTokenAddress));
-        tup = ITimeIsUp(payable(tupAddress));
-        IEmployer employer = IEmployer(payable(employerAddress));
-        _investor = new Investor(this, timeToken, tup, employer);
-        _minionCoordinator = new MinionCoordinator(this);
-        baseTimeFrame = employer.ONE_YEAR().mulDiv(1, employer.D().mulDiv(52, 1));
+    constructor(
+        address timeTokenAddress,
+        address tupAddress,
+        address employerAddress,
+        address sponsorAddress) Ownable(msg.sender) {
+            timeToken = ITimeToken(payable(timeTokenAddress));
+            tup = ITimeIsUp(payable(tupAddress));
+            IEmployer employer = IEmployer(payable(employerAddress));
+            ISponsor sponsor = ISponsor(payable(sponsorAddress));
+            _investor = new Investor(
+                msg.sender,
+                this,
+                timeToken,
+                tup,
+                sponsor
+            );
+            _minionCoordinator = new MinionCoordinator(this);
+            baseTimeFrame = employer.ONE_YEAR().mulDiv(1, employer.D().mulDiv(52, 1));
     }
 
     receive() external payable {
@@ -92,6 +106,14 @@ contract Worker is Ownable {
         _dividendPerToken += earned.mulDiv(FACTOR, totalDepositedTup + 1);
     }
 
+    /// @notice Dedicate some TUP tokens for investments which should add value to the whole platform and will be distributed to users
+    /// @dev Approve and transfer TUP to Investor contract
+    /// @param amountTup The amount of TUP tokens to be transferred to Investor
+    function _addTupToInvest(uint256 amountTup) private {
+        tup.approve(address(_investor), amountTup);
+        try _investor.addTupToInvest(amountTup) { } catch { }
+    }
+
     /// @notice Defines for how long the TUP token of the user should be locked
     /// @dev It calculates the number of blocks the TUP tokens of depositant will be locked in this contract. The depositant CAN NOT anticipate this time using TIME tokens
     /// @param depositant Address of the depositant of TUP tokens
@@ -127,9 +149,7 @@ contract Worker is Ownable {
         }
         uint256 shares = tup.accountShareBalance(address(this));
         if (shares > 0) {
-            try tup.transfer(address(_investor), shares) {
-                _investor.addTup(shares);
-            } catch { }
+            _addTupToInvest(shares);
         }
         try _investor.harvest() { } catch { }
     }    
@@ -157,6 +177,8 @@ contract Worker is Ownable {
         tup.mint{value: amountNative}(amountTime);
         uint256 tupBalanceAfter = tup.balanceOf(address(this)) - tup.accountShareBalance(address(this));
         uint256 mintedTup = tupBalanceAfter - tupBalanceBefore;
+        uint256 investorComission = mintedTup.mulDiv(FEE, 10_000);
+        mintedTup -= investorComission;
         if (reinvestTup) {
             _registerDepositedTup(minter, mintedTup);
             _adjustBlockToUnlock(minter, mintedTup);
@@ -164,6 +186,8 @@ contract Worker is Ownable {
             if (minter != address(this))
                 tup.transfer(minter, mintedTup);
         }
+        if (investorComission > 0)
+            _addTupToInvest(investorComission);
     }
 
     /// @notice Stores information about the amount of TUP tokens deposited from users
@@ -179,9 +203,15 @@ contract Worker is Ownable {
     /// @param to The receiver address of TUP tokens
     /// @param amount The amount of TUP tokens asked for withdrawn
     function _withdrawTup(address to, uint256 amount) private {
-        require(tup.balanceOf(address(this)) >= amount && totalDepositedTup >= amount, "Worker: the contract does not have enough TUP to be withdrawn");
+        require(tup.balanceOf(address(this)) >= amount && totalDepositedTup + totalAdditionalTupFromInvestor >= amount, "Worker: the contract does not have enough TUP to be withdrawn");
+        if (amount > totalAdditionalTupFromInvestor) {
+            uint256 diff = amount - totalAdditionalTupFromInvestor;
+            totalDepositedTup -= diff;
+            totalAdditionalTupFromInvestor = 0;
+        } else {
+            totalAdditionalTupFromInvestor -= amount;
+        }
         tup.transfer(to, amount);
-        totalDepositedTup -= amount;
     }
 
     /// @notice Calculates the amount of blocks needed to unlock TUP tokens of the depositants
@@ -202,13 +232,16 @@ contract Worker is Ownable {
             _callerComission = 0;
             payable(callerAddress).transfer(comissionToTransfer);
         }
+        uint256 investorComission = timeEarned.mulDiv(FEE, 10_000);
+        timeEarned -= investorComission;
+        timeToken.transfer(address(_investor), investorComission);
         timeToken.transfer(callerAddress, timeEarned);
     }
 
     /// @notice Externally calls the Worker contract to create Minions on demand given some amount of native tokens paid/passed (msg.value parameter)
     /// @dev It performs some additional checks and redirects to the _createMinions() function
     /// @return numberOfMinionsCreated The number of active Minions created for TIME production
-    function createMinions() payable external nonReentrant onlyOncePerBlock returns (uint256 numberOfMinionsCreated) {
+    function createMinions() external payable nonReentrant onlyOncePerBlock returns (uint256) {
         return _minionCoordinator.createMinions{value: msg.value}();
     }
 
@@ -280,6 +313,14 @@ contract Worker is Ownable {
         _mintTup(minter, amountNative, amountTime, reinvestTup);
     }
 
+    /// @notice Check the amount of additional TUP a depositant should receive. It is not dividend, but an additional amount the Investor contract earns from investments on third party contracts
+    /// @dev It should calculate the proportion in terms of the amount of TUP deposited
+    /// @param depositant The address of depositant
+    /// @return additionalTupFromInvestor The amount of additional TUP a depositant should receive
+    function queryAdditionalTupFromInvestor(address depositant) public view returns (uint256) {
+        return depositedTup[depositant].mulDiv(totalAdditionalTupFromInvestor, totalDepositedTup);
+    }
+
     /// @notice Query the amount of TIME available to mint new TUP tokens given some amount of native tokens
     /// @dev It must consider the current price of TIME tokens
     /// @param amountNative The amount of native tokens an user wants to spend
@@ -288,18 +329,32 @@ contract Worker is Ownable {
         return amountNative.mulDiv(timeToken.swapPriceNative(amountNative), FACTOR);
     }
 
+    /// @notice Query the amount of TUP a depositant should receive, including the additional received from Investor contract
+    /// @dev It must consider the amount deposited from user plus the additional, proportionally shared among all users of the contract
+    /// @param depositant The address of depositant
+    /// @return availableTup The amount of TUP available to depositant
+    function queryAvailableTup(address depositant) public view returns (uint256) {
+        return depositedTup[depositant] + queryAdditionalTupFromInvestor(depositant);
+    }
+
     /// @notice Queries the contract for the current earnings an user have
     /// @dev It should consider the developer team comission and fees to cover creation of new Minions
     /// @param depositant The address of an user who have investments in this contract
     /// @return currentEarnings The amount of native tokens the depositant should receive
     /// @return comission The comission that should be charged from earnings in terms of native tokens
+    /// @return investorComission The comission dedicated to Investor contract. Earnings will be returned to TUP holders later
     /// @return minionCreationFee The amount of native tokens that should be used to cover expenses for creation of new Minions
-    function queryCurrentEarnings(address depositant) public view returns (uint256 currentEarnings, uint256 comission, uint256 minionCreationFee) {
-        currentEarnings = depositedTup[depositant].mulDiv(_dividendPerToken - _consumedDividendPerToken[depositant], FACTOR);
-        minionCreationFee = currentEarnings.mulDiv(MINION_CREATION_FEE, 10_000);
-        comission = currentEarnings.mulDiv(FEE, 10_000);
-        currentEarnings -= (comission + minionCreationFee);
-        return (currentEarnings, comission, minionCreationFee);
+    function queryCurrentEarnings(address depositant) public view returns (
+        uint256 currentEarnings,
+        uint256 comission,
+        uint256 investorComission,
+        uint256 minionCreationFee) {
+            currentEarnings = depositedTup[depositant].mulDiv(_dividendPerToken - _consumedDividendPerToken[depositant], FACTOR);
+            minionCreationFee = currentEarnings.mulDiv(MINION_CREATION_FEE, 10_000);
+            comission = currentEarnings.mulDiv(FEE, 10_000);
+            investorComission = comission;
+            currentEarnings -= (comission + investorComission + minionCreationFee);
+            return (currentEarnings, comission, investorComission, minionCreationFee);
     }
 
     /// @notice Queries the contract for the estimated amount needed to activate new Minions given an expected number of them
@@ -326,6 +381,23 @@ contract Worker is Ownable {
     /// @param depositant The address of an depositant
     function queryShareFromDepositant(address depositant) public view returns (uint256) {
         return depositedTup[depositant].mulDiv(FACTOR, tup.balanceOf(address(this)));
+    }
+
+    /// @notice Receives an amount of TUP tokens back from Investor after earnings
+    /// @dev It must check if there is any amount to compensate, since TUP dividends earned by Worker are always sent to Investor in order to earn more yield
+    /// @param amountTup The amount of TUP tokens the Investor wants to send back
+    /// @return shouldCompensate Informs whether the Worker contract should send TUP tokens instead of receiveing them. It happens in cases where dividends to be received are greater than the amount coming from Investor
+    function receiveTupBack(uint256 amountTup) external onlyInvestor returns (bool shouldCompensate) {
+        require(tup.allowance(address(_investor), address(this)) >= amountTup, "Worker: the informed amount was not approved");
+        uint256 compensation = tup.accountShareBalance(address(this));
+        if (amountTup > compensation) {
+            uint256 diff = amountTup - compensation;
+            tup.transferFrom(address(_investor), address(this), diff);
+            totalAdditionalTupFromInvestor += diff;
+        } else {
+            shouldCompensate = true;
+        }
+        return shouldCompensate;
     }
 
     /// @notice Adjusts the base time frame adopted to calculate time lock from deposits
@@ -355,10 +427,11 @@ contract Worker is Ownable {
     /// @notice Withdraws earnings of an user in terms of native tokens
     /// @dev It must check if the contract has enough balance to cover the amount asked. Also, it should calculate and charge all the needed comissions
     function withdrawEarnings() external nonReentrant onlyOncePerBlock {
-        (uint256 amountToWithdraw, uint256 comission, uint256 minionCreationFee) = queryCurrentEarnings(msg.sender);
+        (uint256 amountToWithdraw, uint256 comission, uint256 investorComission, uint256 minionCreationFee) = queryCurrentEarnings(msg.sender);
         require(amountToWithdraw <= address(this).balance, "Worker: contract does not have enough native amount to perform the operation");
         _consumedDividendPerToken[msg.sender] = _dividendPerToken;
         _minionCoordinator.addResourcesForMinionCreation{value: minionCreationFee}();
+        _investor.addNativeToInvest{value: investorComission}();
         payable(timeToken.DEVELOPER_ADDRESS()).transfer(comission);
         payable(msg.sender).transfer(amountToWithdraw);
     }
@@ -367,8 +440,8 @@ contract Worker is Ownable {
     /// @dev Checks the temporal lock to see if the depositant can withdraw the deposited TUP tokens
     function withdrawTup() external nonReentrant onlyOncePerBlock {
         require(block.number >= blockToUnlock[msg.sender], "Worker: depositant can not withdraw TUP at this moment");
-        _withdrawTup(msg.sender, depositedTup[msg.sender]);
         // It resets the block number required to unlock TUP tokens 
         blockToUnlock[msg.sender] = 0;
+        _withdrawTup(msg.sender, queryAvailableTup(msg.sender));
     }
 }
