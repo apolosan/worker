@@ -14,8 +14,9 @@ contract Minion {
 
     function _produceTime() internal {
         _timeToken.mining();
-        if (_coordinator != address(this))
+        if (_coordinator != address(this)) {
             _timeToken.transfer(_coordinator, (_timeToken.balanceOf(address(this)) * 9_999) / 10_000);
+        }
     }
 
     function enableMining() external payable returns (bool success) {

@@ -2,7 +2,6 @@
 pragma solidity >=0.8.13;
 
 interface ISponsor {
-
     function isOperationTypeFlipped() external returns (bool);
     function timeExchange() external returns (address);
     function timeToken() external returns (address);

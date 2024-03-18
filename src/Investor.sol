@@ -10,9 +10,7 @@ import { IUniswapV2Router02 } from "./IUniswapV2Router02.sol";
 import { ISponsor, ITimeIsUp, Math, Ownable, Worker } from "./Worker.sol";
 import { Minion, ITimeToken } from "./Minion.sol";
 
-// TODO: contrato receberá dividendos em TUP do Worker. Decidir o que será feito desses dividendos e como implementar alguma estratégia p/ otimizar o uso
 contract Investor is Minion, Ownable {
-
     using Math for uint256;
 
     enum AssetType {
@@ -29,8 +27,6 @@ contract Investor is Minion, Ownable {
     ITimeIsUp private _tup;
     Worker private _worker;
 
-    address public constant DONATION_ADDRESS = 0xbF616B8b8400373d53EC25bB21E2040adB9F927b;
-
     address public stakingContract;
 
     uint256 public constant PERCENTAGE_TO_PROFIT = 500;
@@ -38,6 +34,7 @@ contract Investor is Minion, Ownable {
     uint256 public amountTupFromWorker;
     uint256 public earnedFromInvestments;
     uint256 public earnedToInvest;
+    uint256 public numberOfVaults;
     uint256 public totalProfit;
     uint256 public totalReceivedToInvest;
 
@@ -45,17 +42,13 @@ contract Investor is Minion, Ownable {
 
     mapping(address => uint256) public vaultBalance;
 
-    constructor(
-        address owner,
-        Worker worker,
-        ITimeToken timeToken,
-        ITimeIsUp tup,
-        ISponsor sponsor)
-            Minion(address(this), timeToken)
-            Ownable(owner) {
-                _worker = worker;
-                _tup = tup;
-                _sponsor = sponsor;
+    constructor(address owner, Worker worker, ITimeToken timeToken, ITimeIsUp tup, ISponsor sponsor)
+        Minion(address(this), timeToken)
+        Ownable(owner)
+    {
+        _worker = worker;
+        _tup = tup;
+        _sponsor = sponsor;
     }
 
     receive() external payable {
@@ -83,30 +76,44 @@ contract Investor is Minion, Ownable {
         _;
     }
 
+    function _addVault(address vaultAddress, AssetType vaultType) private {
+        vaults.push(InvestorVault(IBeefyVault(vaultAddress), vaultType));
+        numberOfVaults++;
+    }
+
     function _checkEarningsAndDistribute() private {
         for (uint256 i = 0; i < vaults.length; i++) {
-            if (vaults[i].vaultInstance.balanceOf(address(this)) >=
-                (vaultBalance[address(vaults[i].vaultInstance)] + vaultBalance[address(vaults[i].vaultInstance)].mulDiv(PERCENTAGE_TO_PROFIT, 10_000))) {
-                    uint256 amountToWithdraw = vaults[i].vaultInstance.balanceOf(address(this)) - vaultBalance[address(vaults[i].vaultInstance)];
-                    _withdrawFromVaultAndConvert(vaults[i].vaultInstance, amountToWithdraw);
+            if (
+                vaults[i].vaultInstance.balanceOf(address(this))
+                    >= (
+                        vaultBalance[address(vaults[i].vaultInstance)]
+                            + vaultBalance[address(vaults[i].vaultInstance)].mulDiv(PERCENTAGE_TO_PROFIT, 10_000)
+                    )
+            ) {
+                uint256 amountToWithdraw = vaults[i].vaultInstance.balanceOf(address(this)) - vaultBalance[address(vaults[i].vaultInstance)];
+                _withdrawFromVaultToNative(vaults[i].vaultInstance, amountToWithdraw);
             }
         }
-        if (_timeToken.withdrawableShareBalance(address(this)) > 0)
+        if (_timeToken.withdrawableShareBalance(address(this)) > 0) {
             try _timeToken.withdrawShare() { } catch { }
+        }
+        if (address(_sponsor) != address(0)) {
+            if (_sponsor.prizeToClaim(address(this)) > 0) {
+                _sponsor.claimPrize();
+            }
+        }
         if (earnedFromInvestments > 0 && earnedFromInvestments <= (address(this).balance - earnedToInvest)) {
             if (address(_sponsor) != address(0)) {
                 uint256 balanceInTime = _timeToken.balanceOf(address(this));
                 _timeToken.approve(address(_sponsor), balanceInTime);
                 _sponsor.extendParticipationPeriod(balanceInTime);
-                if (_sponsor.prizeToClaim(address(this)) > 0)
-                    _sponsor.claimPrize();
                 if (earnedFromInvestments >= _sponsor.minAmountToEarnPoints()) {
-                    try _sponsor.swap{value: earnedFromInvestments}(address(0), address(_tup), earnedFromInvestments) {
+                    try _sponsor.swap{ value: earnedFromInvestments }(address(0), address(_tup), earnedFromInvestments) {
                         earnedFromInvestments = 0;
                     } catch { }
                 }
             } else {
-                try _tup.buy{value: earnedFromInvestments}() {
+                try _tup.buy{ value: earnedFromInvestments }() {
                     earnedFromInvestments = 0;
                 } catch { }
             }
@@ -118,7 +125,7 @@ contract Investor is Minion, Ownable {
                     uint256 earnedBefore = earnedFromInvestments;
                     try _tup.sell(_tup.balanceOf(address(this))) {
                         uint256 diff = earnedFromInvestments - earnedBefore;
-                        _timeToken.donateEth{value: diff}();
+                        _timeToken.donateEth{ value: diff }();
                         earnedFromInvestments -= diff;
                     } catch { }
                 }
@@ -143,22 +150,13 @@ contract Investor is Minion, Ownable {
             // adjusts the amount for each token pair to swap
             amount = amount / 2;
             // performs the swap
-            try router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: amount}(
-                0,
-                path,
-                address(this),
-                block.timestamp + 300
-            ) { 
+            try router.swapExactETHForTokensSupportingFeeOnTransferTokens{ value: amount }(0, path, address(this), block.timestamp + 300) {
                 success = true;
             } catch { }
             if (success) {
                 path[1] = token1;
-                try router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: amount}(
-                    0,
-                    path,
-                    address(this),
-                    block.timestamp + 300
-                ) { } catch {
+                try router.swapExactETHForTokensSupportingFeeOnTransferTokens{ value: amount }(0, path, address(this), block.timestamp + 300) { }
+                catch {
                     success = false;
                 }
             }
@@ -181,12 +179,7 @@ contract Investor is Minion, Ownable {
             address[] memory path = new address[](2);
             path[0] = router.WETH();
             path[1] = asset;
-            try router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: amount}(
-                0,
-                path,
-                address(this),
-                block.timestamp + 300
-            ) {
+            try router.swapExactETHForTokensSupportingFeeOnTransferTokens{ value: amount }(0, path, address(this), block.timestamp + 300) {
                 success = true;
             } catch { }
         }
@@ -197,7 +190,6 @@ contract Investor is Minion, Ownable {
             try vaultInstance.depositAll() { } catch { }
             vaultBalance[address(vault.vaultInstance)] = vaultInstance.balanceOf(address(this));
         }
-        return success;
     }
 
     function _performInvestment() private {
@@ -213,13 +205,18 @@ contract Investor is Minion, Ownable {
         }
     }
 
-    function _withdrawFromAllVaults() private {
+    function _withdrawFromAllVaults() private returns (bool success) {
         for (uint256 i = 0; i < vaults.length; i++) {
-            _withdrawFromVaultAndConvert(vaults[i].vaultInstance, vaultBalance[address(vaults[i].vaultInstance)]);
-        }        
+            if (vaults[i].vaultInstance.balanceOf(address(this)) > 0 && vaultBalance[address(vaults[i].vaultInstance)] > 0) {
+                success = _withdrawFromVaultToNative(vaults[i].vaultInstance, vaultBalance[address(vaults[i].vaultInstance)]);
+                if (!success) {
+                    break;
+                }
+            }
+        }
     }
 
-    function _withdrawFromVaultAndConvert(IBeefyVault vaultInstance, uint256 amount) private returns (bool success) {
+    function _withdrawFromVaultToNative(IBeefyVault vaultInstance, uint256 amount) private returns (bool success) {
         if (amount > 0) {
             require(amount <= vaultInstance.balanceOf(address(this)), "Investor: not enough balance to withdraw from vault");
             vaultInstance.withdraw(amount);
@@ -231,11 +228,16 @@ contract Investor is Minion, Ownable {
                 0,
                 address(this),
                 block.timestamp + 300
-            ) { 
+            ) {
                 success = true;
-            } catch { }
+                vaultBalance[address(vaultInstance)] = vaultInstance.balanceOf(address(this));
+            } catch {
+                IERC20Upgradeable(vaultInstance.want()).approve(
+                    address(vaultInstance), IERC20Upgradeable(vaultInstance.want()).balanceOf(address(this))
+                );
+                vaultInstance.depositAll();
+            }
         }
-        return success;
     }
 
     function addNativeToInvest() external payable onlyWorker generateTime returns (bool success) {
@@ -244,8 +246,7 @@ contract Investor is Minion, Ownable {
             earnedToInvest += msg.value;
             success = true;
         }
-        return success;
-    }    
+    }
 
     function addTupToInvest(uint256 amountTup) external onlyWorker generateTime {
         require(_tup.allowance(address(_worker), address(this)) >= amountTup, "Investor: the informed amount was not approved");
@@ -253,44 +254,68 @@ contract Investor is Minion, Ownable {
         amountTupFromWorker += amountTup;
     }
 
-    function addVault(address vaultAddress, AssetType vaultType) external onlyOwner {
-        vaults.push(InvestorVault(IBeefyVault(vaultAddress), vaultType));
+    function addVaultFromOwner(address vaultAddress, AssetType vaultType) external onlyOwner {
+        _addVault(vaultAddress, vaultType);
     }
 
-    // TODO: terminar essa função
+    function addVaultFromWorker(address vaultAddress, AssetType vaultType) external onlyWorker {
+        _addVault(vaultAddress, vaultType);
+    }
+
     function harvest() external onlyWorker generateTime {
         _checkEarningsAndDistribute();
+        _performInvestment();
     }
 
     function queryCurrentROI() public view returns (uint256) {
         return totalProfit.mulDiv(_worker.FACTOR(), totalReceivedToInvest);
     }
 
-    function removeVault(address vaultAddress) external onlyOwner {
-        if (vaultAddress != address(0)) {
-            bool found;
-            for (uint256 i = 0; i < vaults.length; i++) {
-                if (vaultAddress == address(vaults[i].vaultInstance)) {
-                    for (uint256 j = i; j < vaults.length - 1; j++) {
-                        vaults[j] = vaults[j + 1];
-                    }
-                    found = true;
+    function removeAllVaults() public onlyOwner returns (bool success) {
+        uint256 i = vaults.length;
+        success = true;
+        while (i > 0) {
+            if (vaults[i - 1].vaultInstance.balanceOf(address(this)) == 0 && vaultBalance[address(vaults[i - 1].vaultInstance)] == 0) {
+                vaults.pop();
+                i--;
+                numberOfVaults--;
+            } else {
+                if (_withdrawFromVaultToNative(vaults[i - 1].vaultInstance, vaults[i - 1].vaultInstance.balanceOf(address(this)))) {
+                    vaults.pop();
+                    i--;
+                    numberOfVaults--;
+                } else {
+                    success = false;
                     break;
                 }
             }
-            if (found) {
-                vaults.pop();
-                _withdrawFromVaultAndConvert(IBeefyVault(vaultAddress), IBeefyVault(vaultAddress).balanceOf(address(this)));
+        }
+    }
+
+    function removeVault(address vaultAddress) public onlyOwner returns (bool success) {
+        if (vaultAddress != address(0)) {
+            for (uint256 i = 0; i < vaults.length; i++) {
+                if (vaultAddress == address(vaults[i].vaultInstance)) {
+                    if (_withdrawFromVaultToNative(IBeefyVault(vaultAddress), IBeefyVault(vaultAddress).balanceOf(address(this)))) {
+                        for (uint256 j = i; j < vaults.length - 1; j++) {
+                            vaults[j] = vaults[j + 1];
+                        }
+                        vaults.pop();
+                        success = true;
+                        numberOfVaults--;
+                    }
+                    break;
+                }
             }
         }
-    }    
+    }
 
-    // TODO: ajustar essa função p/ retirar fundos de outros contratos, se houver
     function updateInvestor() external onlyWorker generateTime {
+        _withdrawFromAllVaults();
+        _checkEarningsAndDistribute();
+        payable(address(_worker)).transfer(address(this).balance);
         _tup.transfer(address(_worker), _tup.balanceOf(address(this)));
         _timeToken.transfer(address(_worker), _timeToken.balanceOf(address(this)));
-        earnedFromInvestments = 0;
-        payable(address(_worker)).transfer(address(this).balance);
     }
 
     function updateStakingContract(address newStakingContract) external onlyOwner {

@@ -12,10 +12,7 @@ import { ISponsor, ITimeIsUp, Math, Ownable, Worker } from "./Worker.sol";
 import { Minion, ITimeToken } from "./Minion.sol";
 
 contract Arbitrator is IFlashMintBorrower {
-
-    constructor() {
-
-    }
+    constructor() { }
 
     function doSomething(uint256 amountTup, uint256 fee, bytes calldata data) external {
         // TODO: verificar a viabilidade de fazer arbitragem com TUP via flash mint considerando o TIME e ETH disponível no contrato

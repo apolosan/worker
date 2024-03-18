@@ -5,7 +5,6 @@ import { Minion, ITimeToken } from "./Minion.sol";
 import { Worker } from "./Worker.sol";
 
 contract MinionCoordinator {
-
     struct MinionInstance {
         address prevInstance;
         address nextInstance;
@@ -18,7 +17,7 @@ contract MinionCoordinator {
     address public firstMinionInstance;
     address public lastMinionInstance;
 
-    uint256 public constant MAX_NUMBER_OF_MINIONS = 20_000;    
+    uint256 public constant MAX_NUMBER_OF_MINIONS = 20_000;
 
     uint256 public activeMinions;
     uint256 public dedicatedAmount;
@@ -46,7 +45,7 @@ contract MinionCoordinator {
         require(block.number != _currentBlock[tx.origin], "Coordinator: you cannot perform this operation again in this block");
         _currentBlock[tx.origin] = block.number;
         _;
-    }    
+    }
 
     /// @notice Modifier used to allow function calling only by Worker contract
     modifier onlyWorker() {
@@ -68,7 +67,7 @@ contract MinionCoordinator {
         }
         lastMinionInstance = address(minion);
     }
-    
+
     /// @notice Creates one Minion given a dedicated amount provided
     /// @dev Creates an instance of the Minion contract, registers it into the contract, and activates it for TIME token production
     /// @param dedicatedAmountForFee The dedicated amount for creation of the new Minion instance
@@ -91,7 +90,9 @@ contract MinionCoordinator {
     /// @dev It iterates over the amount of fee dedicated for Minion activation until this value goes to zero, the number of active Minions reach the maximum level, or it reverts for some cause
     /// @param totalFeeForCreation The native amount dedicated for Minion activation for TIME production
     function _createMinions(uint256 totalFeeForCreation) private {
-        require(totalFeeForCreation <= address(this).balance, "Coordinator: there is no enough amount for enabling minion activation for TIME production");
+        require(
+            totalFeeForCreation <= address(this).balance, "Coordinator: there is no enough amount for enabling minion activation for TIME production"
+        );
         bool success;
         do {
             (totalFeeForCreation, success) = _createMinionInstance(totalFeeForCreation);
@@ -113,12 +114,12 @@ contract MinionCoordinator {
         timeProduced += amountTime;
         ITimeToken(_worker.timeToken()).transfer(address(_worker), amountTime);
         return amountTime;
-    }    
+    }
 
     /// @notice Receive specific resources coming from Worker to create new Minions
     /// @dev It should be called only by the Worker contract
     /// @return success Informs if the function was called and executed correctly
-    function addResourcesForMinionCreation() payable external onlyWorker returns (bool success) {
+    function addResourcesForMinionCreation() external payable onlyWorker returns (bool success) {
         if (msg.value > 0) {
             dedicatedAmount += msg.value;
             success = true;
@@ -129,17 +130,18 @@ contract MinionCoordinator {
     /// @notice The Worker contract calls this function to create Minions on demand given some amount of native tokens paid/passed (msg.value parameter)
     /// @dev It performs some additional checks and redirects to the _createMinions() function
     /// @return numberOfMinionsCreated The number of active Minions created for TIME production
-    function createMinions() payable external onlyWorker returns (uint256 numberOfMinionsCreated) {
+    function createMinions() external payable onlyWorker returns (uint256 numberOfMinionsCreated) {
         require(msg.value > 0, "Coordinator: please send some native tokens to create minions");
         numberOfMinionsCreated = activeMinions;
         _createMinions(msg.value);
-        if (dedicatedAmount > 0) {
-            _createMinions(dedicatedAmount);
-            dedicatedAmount = 0;
-        }
+        // if (dedicatedAmount > 0) {
+        //     _createMinions(dedicatedAmount);
+        //     dedicatedAmount = address(this).balance;
+        // }
         numberOfMinionsCreated = activeMinions - numberOfMinionsCreated;
-        if (numberOfMinionsCreated == 0)
+        if (numberOfMinionsCreated == 0) {
             revert("Coordinator: the amount sent is not enough to create and activate new minions for TIME production");
+        }
         return numberOfMinionsCreated;
     }
 
