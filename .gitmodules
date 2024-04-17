@@ -1,6 +1,21 @@
-[submodule "lib/beefy-contracts"]
-	path = lib/beefy-contracts
-	url = https://github.com/beefyfinance/beefy-contracts
 [submodule "lib/protocol"]
 	path = lib/protocol
 	url = https://github.com/0xProject/protocol
+[submodule "lib/pt-v5-vault"]
+	path = lib/pt-v5-vault
+	url = https://github.com/GenerationSoftware/pt-v5-vault
+[submodule "lib/v4-core"]
+	path = lib/v4-core
+	url = https://github.com/pooltogether/v4-core
+[submodule "lib/superform-core"]
+	path = lib/superform-core
+	url = https://github.com/superform-xyz/superform-core
+[submodule "lib/v3-periphery"]
+	path = lib/v3-periphery
+	url = https://github.com/Uniswap/v3-periphery
+[submodule "lib/v3-core"]
+	path = lib/v3-core
+	url = https://github.com/Uniswap/v3-core
+[submodule "lib/swap-router-contracts"]
+	path = lib/swap-router-contracts
+	url = https://github.com/Uniswap/swap-router-contracts

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import { Minion, ITimeToken } from "./Minion.sol";
-import { Worker } from "./Worker.sol";
+import { IWorker } from "./IWorker.sol";
 
 contract MinionCoordinator {
     struct MinionInstance {
@@ -12,14 +12,16 @@ contract MinionCoordinator {
 
     bool private _isOperationLocked;
 
-    Worker private _worker;
+    IWorker private _worker;
 
+    address public currentMinionInstance;
     address public firstMinionInstance;
     address public lastMinionInstance;
 
-    uint256 public constant MAX_NUMBER_OF_MINIONS = 20_000;
+    uint256 public constant MAX_NUMBER_OF_MINIONS = 6_000;
 
     uint256 public activeMinions;
+    uint256 public batchSize;
     uint256 public dedicatedAmount;
     uint256 public timeProduced;
 
@@ -28,8 +30,22 @@ contract MinionCoordinator {
     mapping(address => MinionInstance instance) public minions;
     mapping(address => uint256) public blockToUnlock;
 
-    constructor(Worker worker) {
+    constructor(IWorker worker) {
         _worker = worker;
+        batchSize = 30;
+    }
+
+    receive() external payable {
+        if (msg.value > 0) {
+            dedicatedAmount += msg.value;
+        }
+    }
+
+    fallback() external payable {
+        require(msg.data.length == 0);
+        if (msg.value > 0) {
+            dedicatedAmount += msg.value;
+        }
     }
 
     /// @notice Modifier used to avoid reentrancy attacks
@@ -47,14 +63,14 @@ contract MinionCoordinator {
         _;
     }
 
-    /// @notice Modifier used to allow function calling only by Worker contract
+    /// @notice Modifier used to allow function calling only by IWorker contract
     modifier onlyWorker() {
-        require(msg.sender == address(_worker), "Coordinator: only Worker contract can perform this operation");
+        require(msg.sender == address(_worker), "Coordinator: only IWorker contract can perform this operation");
         _;
     }
 
     /// @notice Registers a Minion in the contract
-    /// @dev Add an instance of the Minion contract into the internal linked list of the Worker contract. It also adjusts information about previous instances registered
+    /// @dev Add an instance of the Minion contract into the internal linked list of the IWorker contract. It also adjusts information about previous instances registered
     /// @param minion The instance of the recently created Minion contract
     function _addMinionInstance(Minion minion) private {
         if (lastMinionInstance != address(0)) {
@@ -64,6 +80,9 @@ contract MinionCoordinator {
         minions[address(minion)].nextInstance = address(0);
         if (firstMinionInstance == address(0)) {
             firstMinionInstance = address(minion);
+            if (currentMinionInstance == address(0)) {
+                currentMinionInstance = firstMinionInstance;
+            }
         }
         lastMinionInstance = address(minion);
     }
@@ -94,86 +113,111 @@ contract MinionCoordinator {
             totalFeeForCreation <= address(this).balance, "Coordinator: there is no enough amount for enabling minion activation for TIME production"
         );
         bool success;
+        uint256 count;
         do {
             (totalFeeForCreation, success) = _createMinionInstance(totalFeeForCreation);
-        } while (totalFeeForCreation > 0 && success);
+            count++;
+        } while (totalFeeForCreation > 0 && success && count < batchSize);
     }
 
     /// @notice Performs production of TIME token
     /// @dev It calls the mining() function of TIME token from all active Minions' instances
     /// @return amountTime The amount of TIME tokens produced
     function _work() private returns (uint256 amountTime) {
-        uint256 timeBalanceBeforeWork = ITimeToken(_worker.timeToken()).balanceOf(address(this));
-        address currentMinionInstance = firstMinionInstance;
-        do {
-            Minion(currentMinionInstance).produceTime();
-            currentMinionInstance = minions[currentMinionInstance].nextInstance;
-        } while (currentMinionInstance != address(0));
-        uint256 timeBalanceAfterWork = ITimeToken(_worker.timeToken()).balanceOf(address(this));
-        amountTime = (timeBalanceAfterWork - timeBalanceBeforeWork);
-        timeProduced += amountTime;
-        ITimeToken(_worker.timeToken()).transfer(address(_worker), amountTime);
-        return amountTime;
+        if (activeMinions > 0) {
+            uint256 timeBalanceBeforeWork = ITimeToken(_worker.timeToken()).balanceOf(address(this));
+            uint256 count;
+            do {
+                Minion(currentMinionInstance).produceTime();
+                currentMinionInstance = minions[currentMinionInstance].nextInstance;
+                count++;
+            } while (currentMinionInstance != address(0) && count < batchSize);
+            if (currentMinionInstance == address(0)) {
+                currentMinionInstance = firstMinionInstance;
+            }
+            uint256 timeBalanceAfterWork = ITimeToken(_worker.timeToken()).balanceOf(address(this));
+            amountTime = (timeBalanceAfterWork - timeBalanceBeforeWork);
+            timeProduced += amountTime;
+            ITimeToken(_worker.timeToken()).transfer(address(_worker), amountTime);
+        }
     }
 
-    /// @notice Receive specific resources coming from Worker to create new Minions
-    /// @dev It should be called only by the Worker contract
+    /// @notice Receive specific resources coming from IWorker to create new Minions
+    /// @dev It should be called only by the IWorker contract
     /// @return success Informs if the function was called and executed correctly
     function addResourcesForMinionCreation() external payable onlyWorker returns (bool success) {
         if (msg.value > 0) {
             dedicatedAmount += msg.value;
             success = true;
         }
-        return success;
     }
 
-    /// @notice The Worker contract calls this function to create Minions on demand given some amount of native tokens paid/passed (msg.value parameter)
+    /// @notice The IWorker contract calls this function to create Minions on demand given some amount of native tokens paid/passed (msg.value parameter)
     /// @dev It performs some additional checks and redirects to the _createMinions() function
+    /// @param addressToSendRebate The address that should receive the remaining value after Minions are created
     /// @return numberOfMinionsCreated The number of active Minions created for TIME production
-    function createMinions() external payable onlyWorker returns (uint256 numberOfMinionsCreated) {
+    function createMinions(address addressToSendRebate) external payable onlyWorker returns (uint256 numberOfMinionsCreated) {
         require(msg.value > 0, "Coordinator: please send some native tokens to create minions");
         numberOfMinionsCreated = activeMinions;
         _createMinions(msg.value);
-        // if (dedicatedAmount > 0) {
-        //     _createMinions(dedicatedAmount);
-        //     dedicatedAmount = address(this).balance;
-        // }
         numberOfMinionsCreated = activeMinions - numberOfMinionsCreated;
         if (numberOfMinionsCreated == 0) {
             revert("Coordinator: the amount sent is not enough to create and activate new minions for TIME production");
         }
-        return numberOfMinionsCreated;
+        if (address(this).balance > dedicatedAmount) {
+            payable(addressToSendRebate).transfer(address(this).balance - dedicatedAmount);
+        }
+    }
+
+    /// @notice Create Minions on demand given the dedicated amount inside the contract
+    /// @dev Its behaviour is similar as the createMinions() function with some differences
+    /// @return numberOfMinionsCreated The number of active Minions created for TIME production
+    function createMinionsForFree() external nonReentrant onlyOncePerBlock returns (uint256 numberOfMinionsCreated) {
+        if (dedicatedAmount > 0 && dedicatedAmount <= address(this).balance) {
+            numberOfMinionsCreated = activeMinions;
+            _createMinions(dedicatedAmount);
+            numberOfMinionsCreated = activeMinions - numberOfMinionsCreated;
+            dedicatedAmount = address(this).balance;
+        }
     }
 
     /// @notice When a new MinionCoordinator is created, this function transfers control over all Minions already created to it
-    /// @dev It iterates over all Minions and copy all references of them from the old to the new MinionCoordinator contract. This function can be called only by the Worker contract
+    /// @dev It iterates over all Minions and copy all references of them from the old to the new MinionCoordinator contract. This function can be called only by the IWorker contract
     /// @param oldCoordinator Instance of the old MinionCoordinator
     function transferMinionsBetweenCoordinators(MinionCoordinator oldCoordinator) external onlyWorker {
+        currentMinionInstance = oldCoordinator.currentMinionInstance();
         firstMinionInstance = oldCoordinator.firstMinionInstance();
         lastMinionInstance = oldCoordinator.lastMinionInstance();
-        address currentMinionInstance = firstMinionInstance;
+        address minionInstance = firstMinionInstance;
         do {
-            (address prevInstance, address nextInstance) = oldCoordinator.minions(currentMinionInstance);
-            minions[currentMinionInstance].prevInstance = prevInstance;
-            minions[currentMinionInstance].nextInstance = nextInstance;
-            currentMinionInstance = nextInstance;
-        } while (currentMinionInstance != address(0));
+            (address prevInstance, address nextInstance) = oldCoordinator.minions(minionInstance);
+            minions[minionInstance].prevInstance = prevInstance;
+            minions[minionInstance].nextInstance = nextInstance;
+            minionInstance = nextInstance;
+        } while (minionInstance != address(0));
+    }
+
+    /// @notice Change the batch size value (maximum number of minions to be created in one transaction)
+    /// @dev It can only be called by IWorker contract, by delegation
+    /// @param newBatchSize The new value of the batch size
+    function updateBatchSize(uint256 newBatchSize) external onlyWorker {
+        batchSize = newBatchSize;
     }
 
     /// @notice Updates the new MinionCoordinator on all Minion instances
-    /// @dev It must be called externally by the Worker contract only, and after calling the transferMinionsBetweenCoordinators() function
+    /// @dev It must be called externally by the IWorker contract only, and after calling the transferMinionsBetweenCoordinators() function
     /// @param newCoordinator Instance of the new MinionCoordinator contract
     function updateCoordinator(MinionCoordinator newCoordinator) external onlyWorker {
-        address currentMinionInstance = firstMinionInstance;
+        address minionInstance = firstMinionInstance;
         do {
-            Minion(currentMinionInstance).updateCoordinator(address(newCoordinator));
-            currentMinionInstance = minions[currentMinionInstance].nextInstance;
-        } while (currentMinionInstance != address(0));
+            Minion(minionInstance).updateCoordinator(address(newCoordinator));
+            minionInstance = minions[minionInstance].nextInstance;
+        } while (minionInstance != address(0));
     }
 
     /// @notice Call the Coordinator contract to produce TIME tokens
-    /// @dev Can be called only by the Worker contract
-    function work() external onlyWorker returns (uint256 producedTime) {
+    /// @dev Can be called only by the IWorker contract
+    function work() external onlyWorker returns (uint256) {
         return _work();
     }
 }
