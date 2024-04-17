@@ -18,7 +18,7 @@ import { IUniswapV2Router02 } from "../src/IUniswapV2Router02.sol";
 import { IWETH } from "../src/IWETH.sol";
 
 contract WorkerVaultTest2 is Test {
-        // POLYGON MAINNET
+    // POLYGON MAINNET
     uint256 public blockNumber = block.number;
 
     uint24[] private UNISWAP_FEES = [500, 3_000, 10_000, 100];
@@ -41,6 +41,8 @@ contract WorkerVaultTest2 is Test {
     IEmployer employer;
     IUniswapV2Router02 public routerV2;
     ISwapRouter public routerV3;
+    TupBtcVault tupBtcVault;
+    TimeTokenVault timeTokenVault;
 
     receive() external payable { }
 
@@ -71,11 +73,11 @@ contract WorkerVaultTest2 is Test {
         workerVault.mint(tup.balanceOf(address(this)), address(this));
         workerVault.transfer(address(0xdead), workerVault.balanceOf(address(this)));
         vm.label(address(workerVault), "vWORK");
-
-        TupBtcVault tupBtcVault = new TupBtcVault(
+        tupBtcVault = new TupBtcVault(
             TIME_IS_UP_ADDRESS, WBTC_ADDRESS, TIME_TOKEN_ADDRESS, SPONSOR_ADDRESS, ROUTER_V2_ADDRESS, ROUTER_V3_ADDRESS, address(this)
         );
-        InvestmentCoordinator(workerVault.investmentCoordinator()).addVault(address(new TimeTokenVault(TIME_TOKEN_ADDRESS, address(this))));
+        timeTokenVault = new TimeTokenVault(TIME_TOKEN_ADDRESS, address(this));
+        InvestmentCoordinator(workerVault.investmentCoordinator()).addVault(address(timeTokenVault));
         InvestmentCoordinator(workerVault.investmentCoordinator()).addVault(address(tupBtcVault));
         vm.label(address(workerVault.investmentCoordinator()), "InvestmentCoordinator");
     }
@@ -119,8 +121,7 @@ contract WorkerVaultTest2 is Test {
         if (amount > 0) {
             for (uint256 i = 0; i < UNISWAP_FEES.length; i++) {
                 bytes memory path = abi.encodePacked(wETH, UNISWAP_FEES[i], WBTC_ADDRESS);
-                ISwapRouter.ExactInputParams memory params =
-                    ISwapRouter.ExactInputParams(path, address(this), block.timestamp + 300, amount, 0);
+                ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams(path, address(this), block.timestamp + 300, amount, 0);
                 vm.roll(++blockNumber);
                 try routerV3.exactInput{ value: amount }(params) {
                     success = true;
@@ -130,7 +131,7 @@ contract WorkerVaultTest2 is Test {
                 }
             }
         }
-    }    
+    }
 
     function _testTupForwardingToInvestorAndAllocation(uint256 amount) private {
         _depositTupAndLock(amount);
@@ -160,15 +161,29 @@ contract WorkerVaultTest2 is Test {
         _testTupForwardingToInvestorAndAllocation(amount);
     }
 
-    // function testAllocationOfInvestments() public {
-    //     uint256 amount = 1 ether;
-    //     _testTupForwardingToInvestorAndAllocation(amount);
-    // }
-
-    function testProfitEarning() public { 
-        uint256 amount = 5 ether;
+    // forge test --match-contract WorkerVaultTest2 --match-test testProfitEarning --rpc-url "polygon" --block-gas-limit 5000000000000000000 -vvv
+    function testProfitEarning() public {
+        uint256 amount = 500 ether;
         _depositTupAndLock(amount);
-        _exchangeFromEthToBtc(100_000);
+        _exchangeFromEthToBtc(100_000 ether);
         vm.roll(++blockNumber);
+        uint256 balanceInTupBefore = tup.balanceOf(address(workerVault));
+        InvestmentCoordinator(workerVault.investmentCoordinator()).checkProfitAndWithdraw();
+        uint256 balanceInTupAfter = tup.balanceOf(address(workerVault));
+        emit log_named_uint("Balance in TUP Before Profit       ", balanceInTupBefore);
+        emit log_named_uint("Balance in TUP Ater Profit         ", balanceInTupAfter);
+        assertGt(balanceInTupAfter, balanceInTupBefore);
+    }
+
+    // forge test --match-contract WorkerVaultTest2 --match-test testVaultRemoval --rpc-url "polygon" --block-gas-limit 5000000000000000000 -vvv
+    function testVaultRemoval() public {
+        uint256 amount = 50 ether;
+        _depositTupAndLock(amount);
+        uint256 balanceInTupBefore = tup.balanceOf(address(workerVault.investmentCoordinator()));
+        InvestmentCoordinator(workerVault.investmentCoordinator()).removeVault(address(tupBtcVault));
+        uint256 balanceInTupAfter = tup.balanceOf(address(workerVault.investmentCoordinator()));
+        emit log_named_uint("Balance in TUP Before Removal      ", balanceInTupBefore);
+        emit log_named_uint("Balance in TUP Ater Removal        ", balanceInTupAfter);
+        assertGt(balanceInTupAfter, balanceInTupBefore);
     }
 }

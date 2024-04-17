@@ -38,6 +38,7 @@ contract WorkerVault is ERC4626, Ownable, IWorker {
     uint256 public earnedAmount;
 
     mapping(address => uint256) private _currentBlock;
+    mapping(address => uint256) private _lastCalculatedTimeToLock;
 
     mapping(address => uint256) public availableTimeAsCaller;
     mapping(address => uint256) public blockToUnlock;
@@ -114,7 +115,7 @@ contract WorkerVault is ERC4626, Ownable, IWorker {
     function _addTupToInvest(uint256 amountTup) private {
         if (amountTup > 0) {
             try ITimeIsUp(asset()).transfer(address(investmentCoordinator), amountTup) {
-                try investmentCoordinator.depositAssetOnVault(asset()) { } catch { } 
+                try investmentCoordinator.depositAssetOnVault(asset()) { } catch { }
             } catch { }
         }
     }
@@ -122,20 +123,22 @@ contract WorkerVault is ERC4626, Ownable, IWorker {
     /// @notice Defines for how long the TUP token of the user should be locked
     /// @dev It calculates the number of blocks the TUP tokens of depositant will be locked in this contract. The depositant CAN NOT anticipate this time using TIME tokens
     /// @param depositant Address of the depositant of TUP tokens
-    /// @param amountTup The amount of TUP tokens to be deposited
-    function _adjustBlockToUnlock(address depositant, uint256 amountTup) private {
-        uint256 previousBlockToUnlock = blockToUnlock[depositant];
-        blockToUnlock[depositant] = block.number + calculateTimeToLock(amountTup);
-        if (previousBlockToUnlock > 0) {
-            if (blockToUnlock[depositant] > previousBlockToUnlock && previousBlockToUnlock > block.number) {
-                blockToUnlock[depositant] = previousBlockToUnlock;
+    function _adjustBlockToUnlock(address depositant) private {
+        uint256 currentCalculatedTimeToLock = calculateTimeToLock(convertToAssets(balanceOf(depositant)));
+        uint256 blockAdjustment = block.number + currentCalculatedTimeToLock;
+        if (currentCalculatedTimeToLock < _lastCalculatedTimeToLock[depositant]) {
+            if (blockToUnlock[depositant] > blockAdjustment || blockToUnlock[depositant] == 0) {
+                blockToUnlock[depositant] = blockAdjustment;
             }
+        } else {
+            blockToUnlock[depositant] = blockAdjustment;
         }
+        _lastCalculatedTimeToLock[depositant] = currentCalculatedTimeToLock;
     }
 
-    function _afterDeposit(uint256 assets, uint256 shares) private {
+    function _afterDeposit(address receiver, uint256 assets, uint256 shares) private {
         assets = assets == 0 ? convertToAssets(shares) : assets;
-        _adjustBlockToUnlock(_msgSender(), assets);
+        _adjustBlockToUnlock(receiver);
         _earn();
         if (_minionCreation > 0) {
             minionCoordinator.addResourcesForMinionCreation{ value: _minionCreation }();
@@ -149,6 +152,7 @@ contract WorkerVault is ERC4626, Ownable, IWorker {
             try minionCoordinator.createMinionsForFree() { } catch { }
         }
         _callToProduction(false);
+        try investmentCoordinator.checkProfitAndWithdraw() { } catch { }
         _addTupToInvest(assets.mulDiv(INVESTMENT_FEE, 10_000));
     }
 
@@ -244,7 +248,7 @@ contract WorkerVault is ERC4626, Ownable, IWorker {
         if (reinvestTup) {
             uint256 shares = convertToShares(mintedTup);
             _mint(minter, shares);
-            _adjustBlockToUnlock(minter, mintedTup);
+            _adjustBlockToUnlock(minter);
             emit Deposit(minter, minter, mintedTup, shares);
         } else {
             if (minter != address(this)) {
@@ -268,9 +272,15 @@ contract WorkerVault is ERC4626, Ownable, IWorker {
 
     function _update(address from, address to, uint256 value) internal override {
         super._update(from, to, value);
-        _adjustBlockToUnlock(to, convertToAssets(value));
+        _adjustBlockToUnlock(from);
+        _adjustBlockToUnlock(to);
         if (balanceOf(from) == 0) {
             blockToUnlock[from] = 0;
+            _lastCalculatedTimeToLock[from] = 0;
+        }
+        if (balanceOf(to) == 0) {
+            blockToUnlock[to] = 0;
+            _lastCalculatedTimeToLock[to] = 0;
         }
     }
 
@@ -323,7 +333,7 @@ contract WorkerVault is ERC4626, Ownable, IWorker {
         }
         shares = previewDeposit(assets);
         _deposit(_msgSender(), receiver, assets, shares);
-        _afterDeposit(assets, shares);
+        _afterDeposit(receiver, assets, shares);
     }
 
     /// @notice Call the Worker contract to earn resources, pay a given comission to the caller and reinvest comission in the contract
@@ -356,7 +366,7 @@ contract WorkerVault is ERC4626, Ownable, IWorker {
         }
         assets = previewMint(shares);
         _deposit(_msgSender(), receiver, assets, shares);
-        _afterDeposit(assets, shares);
+        _afterDeposit(receiver, assets, shares);
     }
 
     /// @notice Performs TUP minting as depositant, using the TIME produced from Minions as part of collateral needed

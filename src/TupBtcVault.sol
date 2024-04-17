@@ -33,7 +33,7 @@ contract TupBtcVault is ERC4626, Minion, Ownable {
 
     address private _wETH;
 
-    uint256 private constant CONVERSION_FEE = 100;
+    uint256 private constant CONVERSION_FEE = 300;
     uint256 private constant FEE = 2_000;
 
     uint24[] private UNISWAP_FEES = [500, 3_000, 10_000, 100];
@@ -161,7 +161,12 @@ contract TupBtcVault is ERC4626, Minion, Ownable {
                         }
                     }
                     if (!success) {
-                        revert ExchangeRouterError(address(routerV3));
+                        _timeToken.approve(asset(), _timeToken.balanceOf(address(this)));
+                        try ITimeIsUp(asset()).mint{ value: address(this).balance }(_timeToken.balanceOf(address(this))) {
+                            success = true;
+                        } catch {
+                            revert ExchangeRouterError(address(routerV3));
+                        }
                     }
                 }
                 if (!success) {

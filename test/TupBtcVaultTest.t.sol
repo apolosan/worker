@@ -66,13 +66,7 @@ contract TupBtcVaultTest is Test {
         tup = ITimeIsUp(TIME_IS_UP_ADDRESS);
 
         tupBtcVault = new TupBtcVault(
-            TIME_IS_UP_ADDRESS,
-            WBTC_ADDRESS,
-            TIME_TOKEN_ADDRESS,
-            SPONSOR_ADDRESS,
-            ROUTER_V2_ADDRESS,
-            ROUTER_V3_ADDRESS,
-            address(this)
+            TIME_IS_UP_ADDRESS, WBTC_ADDRESS, TIME_TOKEN_ADDRESS, SPONSOR_ADDRESS, ROUTER_V2_ADDRESS, ROUTER_V3_ADDRESS, address(this)
         );
         timeToken = ITimeToken(payable(TIME_TOKEN_ADDRESS));
         tupBtcVault.enableMining{ value: timeToken.fee() }();
@@ -105,8 +99,7 @@ contract TupBtcVaultTest is Test {
         if (amount > 0) {
             for (uint256 i = 0; i < UNISWAP_FEES.length; i++) {
                 bytes memory path = abi.encodePacked(wETH, UNISWAP_FEES[i], WBTC_ADDRESS);
-                ISwapRouter.ExactInputParams memory params =
-                    ISwapRouter.ExactInputParams(path, address(this), block.timestamp + 300, amount, 0);
+                ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams(path, address(this), block.timestamp + 300, amount, 0);
                 vm.roll(++blockNumber);
                 try routerV3.exactInput{ value: amount }(params) {
                     success = true;
@@ -125,7 +118,7 @@ contract TupBtcVaultTest is Test {
         tup.buy{ value: 10 ether }();
         tup.approve(address(tupBtcVault), tup.balanceOf(depositant));
         vm.roll(++blockNumber);
-        tupBtcVault.mint(tup.balanceOf(depositant).mulDiv(10,100), depositant);
+        tupBtcVault.mint(tup.balanceOf(depositant).mulDiv(10, 100), depositant);
         vm.roll(++blockNumber);
         tupBtcVault.transfer(address(0xdead), tupBtcVault.balanceOf(depositant));
         vm.stopPrank();
@@ -244,7 +237,7 @@ contract TupBtcVaultTest is Test {
         uint160 amountOfWallets = 5;
         _firstMintAndBurn(address(this));
         for (uint160 i = 0; i < amountOfWallets; i++) {
-            _testTupDeposit(5 ether, address(uint160(20+i)));
+            _testTupDeposit(5 ether, address(uint160(20 + i)));
         }
     }
 
@@ -256,7 +249,7 @@ contract TupBtcVaultTest is Test {
             _firstMintAndBurn(address(this));
         }
         for (uint16 i = 0; i < amountOfWallets; i++) {
-            _testTupDeposit(uint256(amount * 1 ether), address(uint160(20+i)));
+            _testTupDeposit(uint256(amount * 1 ether), address(uint160(20 + i)));
         }
     }
 
@@ -264,8 +257,8 @@ contract TupBtcVaultTest is Test {
         uint160 amountOfWallets = 5;
         _firstMintAndBurn(address(this));
         for (uint160 i = 0; i < amountOfWallets; i++) {
-            _testTupDeposit(5 ether, address(uint160(20+i)));
-            _testTupWithdraw(100, address(uint160(20+i)));
+            _testTupDeposit(5 ether, address(uint160(20 + i)));
+            _testTupWithdraw(100, address(uint160(20 + i)));
         }
     }
 
@@ -277,8 +270,8 @@ contract TupBtcVaultTest is Test {
             _firstMintAndBurn(address(this));
         }
         for (uint16 i = 0; i < amountOfWallets; i++) {
-            _testTupDeposit(uint256(amount * 1 ether), address(uint160(20+i)));
-            _testTupWithdraw(100, address(uint160(20+i)));
+            _testTupDeposit(uint256(amount * 1 ether), address(uint160(20 + i)));
+            _testTupWithdraw(100, address(uint160(20 + i)));
         }
     }
 
