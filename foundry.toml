@@ -9,12 +9,14 @@ remappings = [
     '@layerzerolabs/=lib/solidity-examples/',
     '@aave/core-v3/=lib/aave-v3-core/',
     '@chainlink/=lib/chainlink/',
-    '@beefy/=lib/beefy-contracts/contracts/BIFI/',
-    '@beefy-zaps/=lib/beefy-zaps/',
     '@0x/contracts-utils/=lib/0xprotocol/utils/',
     '@0x/zero-ex/=lib/0xprotocol/zero-ex/',
     '@0x/contracts-erc20/=lib/0xprotocol/erc20/',
-    '@openzeppelin/=lib/openzeppelin-contracts/'
+    '@openzeppelin/=lib/openzeppelin-contracts/',
+    '@superform-core/=lib/superform-core/',
+    '@uniswap/v3-periphery/=lib/v3-periphery/',
+    '@uniswap/v3-core/=lib/v3-core/',
+    '@uniswap/swap-router-contracts/=lib/swap-router-contracts/'
 ]
 
 block_gas_limit = 20_000_000
@@ -34,21 +36,21 @@ goerli="https://rpc.ankr.com/eth_goerli"
 bsc_testnet="https://data-seed-prebsc-1-s3.binance.org:8545"
 mumbai="https://polygon-mumbai-bor.publicnode.com"
 fantom_testnet="https://fantom-testnet.public.blastapi.io"
-sepolia="https://eth-sepolia.g.alchemy.com/v2/QIrjpC82K8VlHFNCrZZ9YmNxDNHRcjRc"
+sepolia=""
 scroll_sepolia="scroll-sepolia-testnet.rpc.thirdweb.com"
 
 avalanche="https://avalanche.rpc.thirdweb.com"
 gnosis="https://rpc.ankr.com/gnosis"
 arbitrum="https://arbitrum.llamarpc.com"
 base="https://base.publicnode.com"
-polygon="https://polygon-mainnet.g.alchemy.com/v2/VFnur-ZlerwuG9NAAy0JDPve9oT-NyTZ"
+polygon="https://polygon-pokt.nodies.app"
 bsc="https://bsc-dataseed.binance.org"
 fantom="https://fantom.rpc.thirdweb.com"
 evmos="https://evmos-evm.publicnode.com"
-ethereum="https://eth-mainnet.g.alchemy.com/v2/i77OXfpYHkX5ipMOiZRBRbDGes5SzILS"
+ethereum=""
 zkevm="https://zkevm-rpc.com"
 celo="https://forno.celo.org"
-optimism="https://opt-mainnet.g.alchemy.com/v2/E296ZW2iuhc3Pyw9cCyCR2NXT0UKSuxY"
+optimism=""
 moonriver="https://moonriver.rpc.thirdweb.com"
 scroll="https://1rpc.io/scroll"
 
