@@ -21,17 +21,10 @@ contract TimeTokenVault is ERC4626, Minion, Ownable {
         Ownable(_owner)
     { }
 
-    receive() external payable {
-        if (msg.value > 0) {
-            earned += msg.value;
-        }
-    }
+    receive() external payable { }
 
     fallback() external payable {
         require(msg.data.length == 0);
-        if (msg.value > 0) {
-            earned += msg.value;
-        }
     }
 
     function _afterDeposit() private {
@@ -46,7 +39,11 @@ contract TimeTokenVault is ERC4626, Minion, Ownable {
 
     function _earnTime() private {
         if (ITimeToken(payable(asset())).withdrawableShareBalance(address(this)) > 0) {
+            uint256 balanceBefore = address(this).balance;
             try ITimeToken(payable(asset())).withdrawShare() {
+                if (address(this).balance > balanceBefore) {
+                    earned += (address(this).balance - balanceBefore);
+                }
                 try ITimeToken(payable(asset())).saveTime{ value: earned }() {
                     earned = 0;
                 } catch { }

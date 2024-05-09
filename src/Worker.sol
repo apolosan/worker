@@ -460,15 +460,6 @@ contract Worker is Ownable, IWorker {
     //     _updateTupBalance();
     // }
 
-    /// @notice Updates the MinionCoordinator contract to interact with the Worker
-    /// @dev Also asks for an instance, but the address of the new contract is enough. Admin only
-    /// @param newMinionCoordinator The instance of the new contract
-    function updateMinionCoordinator(MinionCoordinator newMinionCoordinator) external onlyOwner {
-        newMinionCoordinator.transferMinionsBetweenCoordinators(minionCoordinator);
-        minionCoordinator.updateCoordinator(newMinionCoordinator);
-        minionCoordinator = newMinionCoordinator;
-    }
-
     /// @notice Withdraws earnings of an user in terms of native tokens
     /// @dev It must check if the contract has enough balance to cover the amount asked. Also, it should calculate and charge all the needed comissions
     function withdrawEarnings() external nonReentrant onlyOncePerBlock {

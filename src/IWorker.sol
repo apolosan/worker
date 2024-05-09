@@ -31,5 +31,4 @@ interface IWorker {
     function queryNumberOfMinionsToActivateFromAmount(uint256 amount) external view returns (uint256);
     function updateBatchSize(uint256 newBatchSize) external;
     function updateBaseTimeFrame(uint256 newBaseTimeFrame) external;
-    function updateMinionCoordinator(MinionCoordinator newMinionCoordinator) external;
 }

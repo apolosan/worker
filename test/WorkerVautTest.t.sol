@@ -153,6 +153,14 @@ contract WorkerVaultTest is Test {
         uint256 balanceOnVaultBefore = workerVault.balanceOf(address(this));
         vm.deal(address(this), amount * 100);
         payable(address(workerVault)).call{ value: amount * 10 }("");
+
+        vm.startPrank(address(21));
+        vm.deal(address(21), amount * 100);
+        vm.roll(++blockNumber);
+        workerVault.mintTupAsThirdParty{value: amount * 10}(address(21), false);
+        vm.stopPrank();
+
+        vm.roll(++blockNumber);
         workerVault.investWithNoCapital();
         vm.roll(++blockNumber);
         vm.deal(address(this), amount * 10);

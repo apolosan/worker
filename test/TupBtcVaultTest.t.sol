@@ -5,7 +5,6 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { console } from "forge-std/console.sol";
 import { stdStorage, StdStorage, StdCheats, Test } from "forge-std/Test.sol";
 import { TupBtcVault, IERC20, ITimeIsUp, ITimeToken } from "../src/TupBtcVault.sol";
-import { OracleMock } from "../src/mock/OracleMock.sol";
 
 import { ISwapRouter } from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import { IUniswapV3Factory } from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
@@ -22,7 +21,7 @@ contract TupBtcVaultTest is Test {
 
     uint256 public constant CURRENT_BLOCK_NUMBER = 55822515;
 
-    uint256 public blockNumber = 55822515;
+    uint256 public blockNumber = CURRENT_BLOCK_NUMBER;
     uint256 public counterForFuzzMultipleDeposit;
     uint256 public counterForFuzzMultipleWithdrawals;
     // POLYGON MAINNET
@@ -40,7 +39,6 @@ contract TupBtcVaultTest is Test {
 
     uint24[] private UNISWAP_FEES = [500, 3_000, 10_000, 100];
 
-    OracleMock oracleMock;
     ITimeToken timeToken;
     ITimeIsUp tup;
     TupBtcVault tupBtcVault;
@@ -62,7 +60,6 @@ contract TupBtcVaultTest is Test {
         vm.label(ROUTER_V2_ADDRESS, "RouterV2");
         vm.label(ROUTER_V3_ADDRESS, "RouterV3");
 
-        oracleMock = new OracleMock();
         tup = ITimeIsUp(TIME_IS_UP_ADDRESS);
 
         tupBtcVault = new TupBtcVault(

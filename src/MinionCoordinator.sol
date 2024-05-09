@@ -4,6 +4,10 @@ pragma solidity ^0.8.13;
 import { Minion, ITimeToken } from "./Minion.sol";
 import { IWorker } from "./IWorker.sol";
 
+/// @title MinionCoordinator contract
+/// @author Einar Cesar - TIME Token Finance - https://timetoken.finance
+/// @notice Coordinates the creation and calling of Minions in order to produce TIME in a larger scale
+/// @dev It is attached and managed by the WorkerVault
 contract MinionCoordinator {
     struct MinionInstance {
         address prevInstance;
@@ -18,7 +22,7 @@ contract MinionCoordinator {
     address public firstMinionInstance;
     address public lastMinionInstance;
 
-    uint256 public constant MAX_NUMBER_OF_MINIONS = 6_000;
+    uint256 public constant MAX_NUMBER_OF_MINIONS = 300_000;
 
     uint256 public activeMinions;
     uint256 public batchSize;
@@ -30,6 +34,9 @@ contract MinionCoordinator {
     mapping(address => MinionInstance instance) public minions;
     mapping(address => uint256) public blockToUnlock;
 
+    /// @notice Instantiates the contract
+    /// @dev It is automatically instantiated by the WorkerVault contract
+    /// @param worker The main instance of the WorkerVault contract
     constructor(IWorker worker) {
         _worker = worker;
         batchSize = 30;
@@ -181,40 +188,13 @@ contract MinionCoordinator {
         }
     }
 
-    /// @notice When a new MinionCoordinator is created, this function transfers control over all Minions already created to it
-    /// @dev It iterates over all Minions and copy all references of them from the old to the new MinionCoordinator contract. This function can be called only by the IWorker contract
-    /// @param oldCoordinator Instance of the old MinionCoordinator
-    function transferMinionsBetweenCoordinators(MinionCoordinator oldCoordinator) external onlyWorker {
-        currentMinionInstance = oldCoordinator.currentMinionInstance();
-        firstMinionInstance = oldCoordinator.firstMinionInstance();
-        lastMinionInstance = oldCoordinator.lastMinionInstance();
-        address minionInstance = firstMinionInstance;
-        do {
-            (address prevInstance, address nextInstance) = oldCoordinator.minions(minionInstance);
-            minions[minionInstance].prevInstance = prevInstance;
-            minions[minionInstance].nextInstance = nextInstance;
-            minionInstance = nextInstance;
-        } while (minionInstance != address(0));
-    }
-
     /// @notice Change the batch size value (maximum number of minions to be created in one transaction)
     /// @dev It can only be called by IWorker contract, by delegation
     /// @param newBatchSize The new value of the batch size
     function updateBatchSize(uint256 newBatchSize) external onlyWorker {
         batchSize = newBatchSize;
     }
-
-    /// @notice Updates the new MinionCoordinator on all Minion instances
-    /// @dev It must be called externally by the IWorker contract only, and after calling the transferMinionsBetweenCoordinators() function
-    /// @param newCoordinator Instance of the new MinionCoordinator contract
-    function updateCoordinator(MinionCoordinator newCoordinator) external onlyWorker {
-        address minionInstance = firstMinionInstance;
-        do {
-            Minion(minionInstance).updateCoordinator(address(newCoordinator));
-            minionInstance = minions[minionInstance].nextInstance;
-        } while (minionInstance != address(0));
-    }
-
+    
     /// @notice Call the Coordinator contract to produce TIME tokens
     /// @dev Can be called only by the IWorker contract
     function work() external onlyWorker returns (uint256) {
