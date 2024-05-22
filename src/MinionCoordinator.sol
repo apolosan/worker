@@ -39,7 +39,7 @@ contract MinionCoordinator {
     /// @param worker The main instance of the WorkerVault contract
     constructor(IWorker worker) {
         _worker = worker;
-        batchSize = 30;
+        batchSize = 15;
     }
 
     receive() external payable {

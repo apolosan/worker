@@ -242,7 +242,7 @@ contract WorkerVault is ERC4626, Ownable, IWorker {
             }
         }
         if (production > 0) {
-            _addTimeToInvest(timeToken.balanceOf(address(this)).mulDiv(INVESTMENT_FEE, 10_000));
+            _addTimeToInvest(production.mulDiv(INVESTMENT_FEE, 10_000));
         }
     }
 
